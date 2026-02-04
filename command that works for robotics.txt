@@ -1,0 +1,13 @@
+command that works for robotics:
+inc_path = 'C:\Users\davie\DynamixelSDK\c\include\dynamixel_sdk\';
+
+if libisloaded(lib_name); unloadlibrary(lib_name); end
+
+% Load providing the include directory explicitly
+loadlibrary(lib_name, [inc_path, 'dynamixel_sdk.h'], ...
+            'addheader', 'port_handler.h', ...
+            'addheader', 'packet_handler.h', ...
+            'includepath', inc_path); 
+
+% Now check again
+libfunctions(lib_name)

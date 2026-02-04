@@ -1,0 +1,9 @@
+world_frame = eye(4);
+transform_fixed = eye(4); %temp transforms
+joint1 = world_frame*fixed_transform;
+transform_1 = eye(4);%this will define the rotation of the first servo at the base of the first length of arm
+joint2 = joint1*trasnform_1;
+transform_2 = eye(4); %this will define the second servo and the length of the first arm section
+joint3 = transform_2*joint2;
+transform_3 = eye(4); %this defines the third servo and second length of arm
+
