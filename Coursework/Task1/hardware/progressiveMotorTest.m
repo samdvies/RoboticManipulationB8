@@ -84,33 +84,33 @@ function progressiveMotorTest(port_num, lib_name)
             
             %% Enable Torque
             fprintf('Enabling torque...\n');
-            calllib(lib_name, 'write1ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_TORQUE_ENABLE, 1);
+            write1ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_TORQUE_ENABLE, 1);
             pause(0.1);
             
             %% Movement Test Sequence
             try
                 % Move to home first (in case it's not there)
                 fprintf('Moving to HOME (0°)...\n');
-                calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, HOME_POS);
+                write4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, HOME_POS);
                 pause(MOVE_DELAY);
                 
                 % Move to +30°
                 fprintf('Moving to +30°...\n');
-                calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, TEST_POS_PLUS);
+                write4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, TEST_POS_PLUS);
                 pause(MOVE_DELAY);
                 
                 % Move to -30°
                 fprintf('Moving to -30°...\n');
-                calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, TEST_POS_MINUS);
+                write4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, TEST_POS_MINUS);
                 pause(MOVE_DELAY);
                 
                 % Return to home
                 fprintf('Returning to HOME...\n');
-                calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, HOME_POS);
+                write4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_GOAL_POSITION, HOME_POS);
                 pause(MOVE_DELAY);
                 
                 % Read final position
-                present_pos = calllib(lib_name, 'read4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_PRESENT_POSITION);
+                present_pos = read4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_PRESENT_POSITION);
                 present_deg = (present_pos - 2048) / 4096 * 360;
                 fprintf('Final position: %d (%.1f° from home)\n', present_pos, present_deg);
                 
@@ -118,9 +118,8 @@ function progressiveMotorTest(port_num, lib_name)
                 fprintf('ERROR during movement: %s\n', ME.message);
             end
             
-            %% Disable Torque While Waiting
-            calllib(lib_name, 'write1ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_TORQUE_ENABLE, 0);
-            fprintf('Torque disabled.\n');
+            %% Keep Torque Enabled at Home (prevents arm falling)
+            fprintf('Holding at HOME position (torque ON).\n');
             
             %% Wait for User Input
             clf(fig);
@@ -149,7 +148,7 @@ function progressiveMotorTest(port_num, lib_name)
                 fprintf('\n!!! EMERGENCY STOP REQUESTED !!!\n');
                 % Disable all motors
                 for stop_id = DXL_IDS
-                    calllib(lib_name, 'write1ByteTxRx', port_num, PROTOCOL_VERSION, stop_id, ADDR_TORQUE_ENABLE, 0);
+                    write1ByteTxRx(port_num, PROTOCOL_VERSION, stop_id, ADDR_TORQUE_ENABLE, 0);
                 end
                 close(fig);
                 fprintf('All motors disabled. Test aborted.\n');

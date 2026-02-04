@@ -36,15 +36,25 @@ function [port_num, lib_name, cleanup] = robotSafeInit(com_port)
     DXL_IDS = [11, 12, 13, 14, 15];  % Joints 1-4 + Gripper
     
     % Control Table Addresses (XM430-W350-T)
+    ADDR_OPERATING_MODE     = 11;
     ADDR_TORQUE_ENABLE      = 64;
     ADDR_PROFILE_VELOCITY   = 112;
     ADDR_MIN_POSITION_LIMIT = 52;
     ADDR_MAX_POSITION_LIMIT = 48;
     
     % Safety Settings
+    POSITION_CONTROL_MODE = 3;  % Operating mode for position control
     SAFE_VELOCITY = 50;        % ≈11.5 RPM (0.229 RPM per unit)
-    MIN_POSITION  = 1024;      % -90° from home (90° in Wizard)
-    MAX_POSITION  = 3072;      % +90° from home (270° in Wizard)
+    
+    % Per-joint position limits (with collision safety buffer)
+    % Format: [min, max] in encoder units (2048 = home/0°)
+    JOINT_LIMITS = [
+        1024, 3072;   % Joint 1 (Base): ±90° - full range OK
+        1024, 3072;   % Joint 2 (Shoulder): ±90° - full range OK  
+        1024, 2900;   % Joint 3 (Elbow): -90° to +75° - avoid wrist-shoulder collision
+        1200, 2900;   % Joint 4 (Wrist): -75° to +75° - avoid hitting base
+    ];
+    % Gripper (ID 15) uses default limits
     
     %% Load Dynamixel SDK Library
     lib_name = '';
@@ -75,14 +85,14 @@ function [port_num, lib_name, cleanup] = robotSafeInit(com_port)
     %% Initialize Port
     fprintf('Opening port: %s at %d baud\n', com_port, BAUDRATE);
     
-    port_num = calllib(lib_name, 'portHandler', com_port);
-    calllib(lib_name, 'packetHandler');
+    port_num = portHandler(com_port);
+    packetHandler();
     
-    if ~calllib(lib_name, 'openPort', port_num)
+    if ~openPort(port_num)
         error('Failed to open port %s. Check connection and COM port number.', com_port);
     end
     
-    if ~calllib(lib_name, 'setBaudRate', port_num, BAUDRATE)
+    if ~setBaudRate(port_num, BAUDRATE)
         error('Failed to set baud rate to %d', BAUDRATE);
     end
     
@@ -95,25 +105,44 @@ function [port_num, lib_name, cleanup] = robotSafeInit(com_port)
     %% Configure Each Motor
     fprintf('\n--- Configuring Motors with Safe Settings ---\n');
     fprintf('Profile Velocity: %d (≈%.1f RPM)\n', SAFE_VELOCITY, SAFE_VELOCITY * 0.229);
-    fprintf('Position Limits: [%d, %d] (±90° from home)\n', MIN_POSITION, MAX_POSITION);
+    fprintf('Per-joint limits (collision-safe):\n');
+    joint_names = {'Base', 'Shoulder', 'Elbow', 'Wrist'};
+    for j = 1:4
+        min_deg = (JOINT_LIMITS(j,1) - 2048) * 360 / 4096;
+        max_deg = (JOINT_LIMITS(j,2) - 2048) * 360 / 4096;
+        fprintf('  %s: [%.0f°, %.0f°]\n', joint_names{j}, min_deg, max_deg);
+    end
     fprintf('----------------------------------------------\n\n');
     
     for i = 1:length(DXL_IDS)
         id = DXL_IDS(i);
         
-        % First, ensure torque is disabled (required to change limits)
-        calllib(lib_name, 'write1ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_TORQUE_ENABLE, 0);
+        % First, ensure torque is disabled (required to change settings)
+        write1ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_TORQUE_ENABLE, 0);
         pause(0.05);
         
-        % Set position limits
-        calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_MIN_POSITION_LIMIT, MIN_POSITION);
-        calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_MAX_POSITION_LIMIT, MAX_POSITION);
+        % Set operating mode to Position Control (CRITICAL!)
+        write1ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_OPERATING_MODE, POSITION_CONTROL_MODE);
+        pause(0.05);
+        
+        % Set position limits (per-joint for IDs 11-14, default for gripper)
+        if id >= 11 && id <= 14
+            joint_idx = id - 10;
+            min_pos = JOINT_LIMITS(joint_idx, 1);
+            max_pos = JOINT_LIMITS(joint_idx, 2);
+        else
+            % Gripper - use wider limits
+            min_pos = 0;
+            max_pos = 4095;
+        end
+        write4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_MIN_POSITION_LIMIT, min_pos);
+        write4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_MAX_POSITION_LIMIT, max_pos);
         
         % Set profile velocity (safe slow speed)
-        calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_PROFILE_VELOCITY, SAFE_VELOCITY);
+        write4ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_PROFILE_VELOCITY, SAFE_VELOCITY);
         
         % Check for communication errors
-        dxl_comm_result = calllib(lib_name, 'getLastTxRxResult', port_num, PROTOCOL_VERSION);
+        dxl_comm_result = getLastTxRxResult(port_num, PROTOCOL_VERSION);
         if dxl_comm_result ~= 0
             warning('Motor ID %d: Communication error (code %d)', id, dxl_comm_result);
         else
@@ -137,7 +166,7 @@ function cleanupFunction(port_num, lib_name)
     
     for id = DXL_IDS
         try
-            calllib(lib_name, 'write1ByteTxRx', port_num, PROTOCOL_VERSION, id, ADDR_TORQUE_ENABLE, 0);
+            write1ByteTxRx(port_num, PROTOCOL_VERSION, id, ADDR_TORQUE_ENABLE, 0);
         catch
             % Ignore errors during cleanup
         end
@@ -145,7 +174,7 @@ function cleanupFunction(port_num, lib_name)
     
     % Close port
     try
-        calllib(lib_name, 'closePort', port_num);
+        closePort(port_num);
         fprintf('>>> Port closed\n');
     catch
         % Ignore

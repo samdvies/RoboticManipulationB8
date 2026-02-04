@@ -37,7 +37,7 @@ function success = moveToPosition(port_num, lib_name, target_pos, target_orienta
         target_orientation = 'auto';  % Auto-search for valid pitch
     end
     if nargin < 5 || isempty(speed)
-        speed = 50;  % Safe slow speed
+        speed = 15;  % Safe slow speed
     end
     
     %% Configuration
@@ -88,35 +88,44 @@ function success = moveToPosition(port_num, lib_name, target_pos, target_orienta
     %% Step 3: Set Profile Velocity
     fprintf('Setting profile velocity: %d\n', speed);
     for i = 1:4
-        calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, ...
-            DXL_IDS(i), ADDR_PROFILE_VELOCITY, speed);
+        write4ByteTxRx(port_num, PROTOCOL_VERSION, DXL_IDS(i), ADDR_PROFILE_VELOCITY, speed);
     end
     
     %% Step 4: Enable Torque
     fprintf('Enabling torque on all joints...\n');
     for i = 1:4
-        calllib(lib_name, 'write1ByteTxRx', port_num, PROTOCOL_VERSION, ...
-            DXL_IDS(i), ADDR_TORQUE_ENABLE, 1);
+        write1ByteTxRx(port_num, PROTOCOL_VERSION, DXL_IDS(i), ADDR_TORQUE_ENABLE, 1);
     end
     pause(0.1);
     
-    %% Step 5: Command Movement
-    fprintf('Commanding movement...\n');
+    %% Step 5: Command Movement - SEQUENTIAL with wait
+    fprintf('Commanding movement (sequential)...\n');
+    ADDR_MOVING = 122;
+    
     for i = 1:4
-        calllib(lib_name, 'write4ByteTxRx', port_num, PROTOCOL_VERSION, ...
-            DXL_IDS(i), ADDR_GOAL_POSITION, encoder_targets(i));
+        write4ByteTxRx(port_num, PROTOCOL_VERSION, DXL_IDS(i), ADDR_GOAL_POSITION, encoder_targets(i));
+        
+        % Wait for this motor to stop moving
+        motor_timeout = tic;
+        while toc(motor_timeout) < 5
+            moving = read1ByteTxRx(port_num, PROTOCOL_VERSION, DXL_IDS(i), ADDR_MOVING);
+            if moving == 0
+                pause(0.1);  % Brief settle time
+                break;
+            end
+            pause(0.05);
+        end
     end
     
-    %% Step 6: Wait for Movement Completion
-    fprintf('Waiting for movement...\n');
+    %% Step 6: Verify all motors reached target
+    fprintf('Verifying positions...\n');
     start_time = tic;
     
     while toc(start_time) < MOVE_TIMEOUT
         % Read current positions
         current_pos = zeros(1, 4);
         for i = 1:4
-            current_pos(i) = calllib(lib_name, 'read4ByteTxRx', port_num, ...
-                PROTOCOL_VERSION, DXL_IDS(i), ADDR_PRESENT_POSITION);
+            current_pos(i) = read4ByteTxRx(port_num, PROTOCOL_VERSION, DXL_IDS(i), ADDR_PRESENT_POSITION);
         end
         
         % Check if reached target
@@ -138,8 +147,7 @@ function success = moveToPosition(port_num, lib_name, target_pos, target_orienta
     %% Step 7: Verify Final Position
     final_enc = zeros(1, 4);
     for i = 1:4
-        final_enc(i) = calllib(lib_name, 'read4ByteTxRx', port_num, ...
-            PROTOCOL_VERSION, DXL_IDS(i), ADDR_PRESENT_POSITION);
+        final_enc(i) = read4ByteTxRx(port_num, PROTOCOL_VERSION, DXL_IDS(i), ADDR_PRESENT_POSITION);
     end
     
     final_q = zeros(1, 4);
