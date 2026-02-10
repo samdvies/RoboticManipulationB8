@@ -55,21 +55,30 @@ function [q, success, info] = inverseKinematics(target_pos, target_orientation, 
     end
     
     %% Wrapper for Auto-Configuration
-    % If 'auto', try elbow-down first (standard), then elbow-up
+    % If 'auto', intelligently select initial configuration based on height
     if strcmpi(elbow_config, 'auto')
-        % Try Elbow-Down first
-        [q, success, info] = solveIK(target_pos, target_orientation, 'elbow-down', L_base, L_prox, L_dist, L_tool, beta, LIMITS);
+        % Heuristic: Low targets likely need Elbow-Up to avoid table collision
+        if target_pos(3) < 50
+            primary_config = 'elbow-up';
+            secondary_config = 'elbow-down';
+        else
+            primary_config = 'elbow-down';
+            secondary_config = 'elbow-up';
+        end
+        
+        % Try Primary Config
+        [q, success, info] = solveIK(target_pos, target_orientation, primary_config, L_base, L_prox, L_dist, L_tool, beta, LIMITS);
         
         if ~success
-            % If failed, try Elbow-Up
-            [q_up, success_up, info_up] = solveIK(target_pos, target_orientation, 'elbow-up', L_base, L_prox, L_dist, L_tool, beta, LIMITS);
+            % If failed, try Secondary
+            [q_sec, success_sec, info_sec] = solveIK(target_pos, target_orientation, secondary_config, L_base, L_prox, L_dist, L_tool, beta, LIMITS);
             
-            % If Elbow-Up worked, or if both failed but Elbow-Up was "better" (e.g. valid but collision), take it
-            if success_up || (info_up.within_limits && ~info_up.ground_collision)
-                q = q_up;
-                success = success_up;
-                info = info_up;
-                info.message = ['(Auto-Switched to Elbow-Up) ' info.message];
+            % If Secondary worked, or if both failed but Secondary was "better" (e.g. valid but collision), take it
+            if success_sec || (info_sec.within_limits && ~info_sec.ground_collision)
+                q = q_sec;
+                success = success_sec;
+                info = info_sec;
+                info.message = ['(Auto-Switched to ' secondary_config ') ' info.message];
             end
         end
     else

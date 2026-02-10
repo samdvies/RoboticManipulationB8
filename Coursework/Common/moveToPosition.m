@@ -30,7 +30,7 @@ function success = moveToPosition(port_num, lib_name, target_pos, target_orienta
         target_orientation = 'auto';  % Use IK auto-config
     end
     if nargin < 5 || isempty(speed)
-        speed = 50;  % Standard speed
+        speed = 30;  % Slow safe speed for lab
     end
     
     %% Configuration
@@ -45,7 +45,7 @@ function success = moveToPosition(port_num, lib_name, target_pos, target_orienta
     ADDR_MOVING = 122;
     
     % Parameters
-    MOVE_TIMEOUT = 8.0;       % Seconds to allow for movement
+    MOVE_TIMEOUT = 12.0;      % Seconds to allow for movement (slower speed needs more time)
     POSITION_THRESHOLD = 20;  % Encoder units (~1.8 deg)
     
     success = false;

@@ -9,6 +9,9 @@ function setupPath()
     % Get coursework root directory
     rootDir = fileparts(mfilename('fullpath'));
     
+    % Add Common library - Fixed Shared Functions
+    addpath(fullfile(rootDir, 'Common'));
+    
     % Add Task1 folders
     addpath(fullfile(rootDir, 'Task1', 'core'));
     addpath(fullfile(rootDir, 'Task1', 'hardware'));
