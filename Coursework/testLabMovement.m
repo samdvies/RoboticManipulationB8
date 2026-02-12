@@ -22,10 +22,25 @@ function cleanup_obj = testLabMovement()
     moveToPosition(port_num, lib_name, [200, 0, 150], 'horizontal');
     pause(2);
 
-    % 3. Test Reachability (User's Point)
-    fprintf('Testing [300, 150, 0] (Should Auto-Elbow-Up)...\n');
-    moveToPosition(port_num, lib_name, [300, 150, 0], 'auto');
-    pause(2);
+    % 3. Probe Coordinates (Interactive)
+    while true
+        fprintf('\n--- Coordinate Probe ---\n');
+        user_input = input('Enter target [x, y, z] (or hitting ENTER to finish): ', 's');
+        if isempty(user_input), break; end
+        
+        try
+            target = str2num(user_input);
+            if length(target) ~= 3
+                fprintf('Invalid input. Use format: 200 0 100\n');
+                continue;
+            end
+            
+            fprintf('Moving to [%.1f, %.1f, %.1f]...\n', target);
+            moveToPosition(port_num, lib_name, target, 'auto');
+        catch
+            fprintf('Error parsing input.\n');
+        end
+    end
 
     % 4. Gripper Test
     fprintf('Testing Gripper...\n');

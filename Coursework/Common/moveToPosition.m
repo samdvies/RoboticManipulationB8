@@ -68,7 +68,7 @@ function success = moveToPosition(port_num, lib_name, target_pos, target_orienta
     %% Step 2: Convert to Encoder Values
     encoder_targets = zeros(1, 4);
     for i = 1:4
-        encoder_targets(i) = angleConversion('rad2enc', q(i));
+        encoder_targets(i) = angleConversion('rad2enc', q(i), i);
     end
     
     %% Step 3: Enable Torque & Set Speed (if needed)
@@ -128,7 +128,7 @@ function success = moveToPosition(port_num, lib_name, target_pos, target_orienta
     final_q = zeros(1, 4);
     for i = 1:4
         enc = read4ByteTxRx(port_num, PROTOCOL_VERSION, DXL_IDS(i), ADDR_PRESENT_POSITION);
-        final_q(i) = angleConversion('enc2rad', enc);
+        final_q(i) = angleConversion('enc2rad', enc, i);
     end
     
     [~, actual_pos, ~] = forwardKinematics(final_q);
